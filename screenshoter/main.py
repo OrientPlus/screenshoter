@@ -13,6 +13,7 @@ from rabbit.broker import (
 
 from rabbit.models import ScreenshotJob, StorageJob, JobStatus
 from screenshoter.playwrt import ScreenshotCapture
+from common.logger import get_logger
 
 PAGE_TIMEOUT_MS = 30_000
 SCREENSHOT_TIMEOUT_MS = 20_000
@@ -20,6 +21,7 @@ SCREENSHOT_TIMEOUT_MS = 20_000
 
 class ScreenshotService:
     def __init__(self) -> None:
+        self._logger = get_logger(__name__)
         self._rabbit: Optional[RabbitMQClient] = None
         self._capture: Optional[ScreenshotCapture] = None
 
@@ -32,11 +34,15 @@ class ScreenshotService:
 
         await self._rabbit.consume(QUEUE_SCREENSHOT_JOBS, self._process_job)
 
+        self._logger.info("Successfully connected to RabbitMQ")
+
     async def stop(self) -> None:
         if self._capture:
             await self._capture.stop()
         if self._rabbit:
             await self._rabbit.disconnect()
+
+        self._logger.info("Successfully disconnected from RabbitMQ")
 
     async def _process_job(self, message: AbstractIncomingMessage) -> None:
         async with message.process(requeue=False):
@@ -44,6 +50,7 @@ class ScreenshotService:
                 data = RabbitMQClient.parse_message(message)
                 job = ScreenshotJob(**data)
             except Exception as e:
+                self._logger.exception("Exception during broker message processing")
                 return
 
             await self._handle_job(job)
@@ -56,6 +63,7 @@ class ScreenshotService:
                 url=job.url,
                 selector=job.selector,
             )
+            self._logger.info("Screenshot received successfully")
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
             await self._rabbit.publish_status(
@@ -63,18 +71,27 @@ class ScreenshotService:
                 JobStatus.FAILED,
                 detail=error_msg,
             )
+            self._logger.exception("Exception during screenshot capture: %s", error_msg)
+
             return
 
         storage_payload = StorageJob(
             job_id=job.job_id,
             image_hex=image_bytes.hex(),
         )
-        await self._rabbit.publish(
-            QUEUE_STORAGE_JOBS,
-            storage_payload.model_dump(),
-        )
 
-        await self._rabbit.publish_status(job.job_id, JobStatus.UPLOADING)
+        try:
+            await self._rabbit.publish(
+                QUEUE_STORAGE_JOBS,
+                storage_payload.model_dump(),
+            )
+
+            self._logger.info("The image was transferred to the 'storage' service")
+
+            await self._rabbit.publish_status(job.job_id, JobStatus.UPLOADING)
+        except Exception as e:
+            self._logger.exception("Exception during the publication of a message to the broker")
+
 
     async def __aenter__(self) -> "ScreenshotService":
         await self.start()

@@ -16,12 +16,14 @@ from rabbit.broker import (
 )
 
 from rabbit.models import *
+from common.logger import get_logger
 
 security = HTTPBearer()
 
 
 class Server:
     def __init__(self):
+        self._logger = get_logger(__name__)
         self.app = FastAPI()
         self._users: Dict[str, str] = {"admin": "admin"}
 
@@ -41,9 +43,13 @@ class Server:
 
         await self._rabbit.consume(QUEUE_STATUS_UPDATES, self._handle_status_update)
 
+        self._logger.info("Successfully connected to RabbitMQ")
+
     async def _on_shutdown(self) -> None:
         if self._rabbit:
             await self._rabbit.disconnect()
+
+        self._logger.info("Successfully disconnected from RabbitMQ")
 
     async def _handle_status_update(self, message) -> None:
         async with message.process():
@@ -56,7 +62,7 @@ class Server:
                     detail=update.detail
                 )
             except Exception as e:
-                print(f"ERROR: {e}")
+                self._logger.exception("Exception during processing of a message from a broker")
 
     def register_routes(self) -> None:
         @self.app.post(
@@ -71,9 +77,11 @@ class Server:
         )
         async def auth(request: AuthRequest) -> AuthResponse:
             if request.username is None or request.password is None:
+                self._logger.error("Invalid username or password %s:%s", request.username, request.password)
                 raise HTTPException(status_code=401, detail="Invalid credentials")
 
             if request.username not in self._users or self._users[request.username] != request.password:
+                self._logger.error("Invalid username or password %s:%s", request.username, request.password)
                 raise HTTPException(status_code=403, detail="Invalid credentials")
 
             access_token = self.create_access_token({"sub": request.username})
@@ -95,6 +103,7 @@ class Server:
                 _username: str = Depends(self.verify_token)
         ) -> JobCreatedResponse:
             if self._rabbit is None:
+                self._logger.error("The message broker is not initialized")
                 raise HTTPException(status_code=401, detail="Message broker unavailable")
 
             job_id = str(uuid.uuid4())
@@ -105,10 +114,18 @@ class Server:
                 status=JobStatus.PENDING,
             )
 
-            await self._rabbit.publish(
-                QUEUE_SCREENSHOT_JOBS,
-                job.model_dump(),
-            )
+            try:
+                await self._rabbit.publish(
+                    QUEUE_SCREENSHOT_JOBS,
+                    job.model_dump(),
+                )
+            except Exception as e:
+                self._logger.exception(
+                    "Exception during an attempt to post a message to the broker's channel %s",
+                    QUEUE_SCREENSHOT_JOBS
+                )
+
+            self._logger.info("Job %s created successfully; url: %s", job_id, request.url)
 
             return JobCreatedResponse(
                 job_id=job_id,
@@ -129,6 +146,7 @@ class Server:
         async def get_job_status(job_id: str, _username=Depends(self.verify_token)) -> JobStatusResponse:
             job = self._jobs.get(job_id)
             if job is None:
+                self._logger.warning("Job %s not found in route '/screenshot/{job_id}'", job_id)
                 raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
             return job
@@ -148,9 +166,11 @@ class Server:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             username: str = payload.get("sub")
             if username is None or username not in self._users:
+                self._logger.warning("Unknown user %s during token validation", username)
                 raise HTTPException(status_code=403, detail="Unknown credentials")
 
             return username
 
         except JWTError:
+            self._logger.exception("Failed to validate the token")
             raise HTTPException(status_code=401, detail="Could not validate credentials")

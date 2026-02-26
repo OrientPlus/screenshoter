@@ -8,6 +8,8 @@ from aio_pika.abc import AbstractIncomingMessage, AbstractQueue
 
 from rabbit.models import StatusUpdate, JobStatus
 
+from common.logger import get_logger
+
 RABBITMQ_URL = "amqp://guest:guest@rabbitmq:5672/"
 
 QUEUE_SCREENSHOT_JOBS = "screenshot_jobs"
@@ -17,6 +19,8 @@ QUEUE_STATUS_UPDATES = "status_updates"
 
 class RabbitMQClient:
     def __init__(self, url: str = RABBITMQ_URL) -> None:
+        self._logger = get_logger(__name__)
+
         self._url = url
         self._connection: Optional[aio_pika.RobustConnection] = None
         self._channel: Optional[aio_pika.abc.AbstractChannel] = None
@@ -27,14 +31,19 @@ class RabbitMQClient:
         self._channel = await self._connection.channel()
         await self._channel.set_qos(prefetch_count=10)
 
+        self._logger.info("The 'RabbitMQClient' service has successfully connected to the broker")
+
     async def disconnect(self) -> None:
         if self._channel and not self._channel.is_closed:
             await self._channel.close()
         if self._connection and not self._connection.is_closed:
             await self._connection.close()
 
+        self._logger.info("'RabbitMQClient' service successfully disconnected from the broker")
+
     async def declare_queue(self, name: str) -> aio_pika.abc.AbstractQueue:
         if self._channel is None:
+            self._logger.error("The broker object has not been initialized")
             raise RuntimeError("Not connected to RabbitMQ")
 
         if name not in self._queues:
@@ -49,9 +58,11 @@ class RabbitMQClient:
                 QUEUE_STATUS_UPDATES,
         ):
             await self.declare_queue(queue_name)
+        self._logger.info("All queues have been declared successfully")
 
     async def publish(self, queue_name: str, payload: dict) -> None:
         if self._channel is None:
+            self._logger.error("The broker object has not been initialized")
             raise RuntimeError("Not connected to RabbitMQ")
 
         body = json.dumps(payload).encode()
@@ -66,6 +77,7 @@ class RabbitMQClient:
             message,
             routing_key=queue_name,
         )
+        self._logger.info("Published message to queue: %s", queue_name)
 
     async def publish_status(
             self,
@@ -80,6 +92,7 @@ class RabbitMQClient:
         )
 
         await self.publish(QUEUE_STATUS_UPDATES, update.model_dump())
+        self._logger.info("Status update for job %s has been published", job_id)
 
     async def consume(
             self,
@@ -88,7 +101,7 @@ class RabbitMQClient:
             no_ack: bool = False
     ) -> str:
         queue = await self.declare_queue(queue_name)
-        tag = await queue.consume(callback, no_ack=no_ack)
+        tag = await queue.consume(callback, no_ack=no_ack) # TODO проверить ack в хендлерах
 
         return tag
 
@@ -96,10 +109,10 @@ class RabbitMQClient:
     def parse_message(message: AbstractIncomingMessage) -> dict:
         try:
             return json.loads(message.body)
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError as e:
             raise ValueError(
                 f"Invalid JSON: {message.body!r}"
-            ) from exc
+            ) from e
 
     @classmethod
     async def wait_for_broker(

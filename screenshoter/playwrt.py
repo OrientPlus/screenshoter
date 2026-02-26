@@ -12,6 +12,8 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
+from common.logger import get_logger
+
 _BROWSER_LAUNCH_ARGS = [
     "--no-sandbox",                 # обязательно в Docker (нет привилегированного режима)
     "--disable-dev-shm-usage",      # /dev/shm в Docker часто мал → использовать /tmp
@@ -32,15 +34,22 @@ _SCREENSHOT_TIMEOUT_MS   = 20_000   # максимум на сам захват 
 
 class ScreenshotCapture:
     def __init__(self) -> None:
+        self._logger = get_logger(__name__)
         self._playwright: Optional[Playwright] = None
         self._browser:    Optional[Browser]    = None
 
     async def start(self) -> None:
-        self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(
-            headless=True,
-            args=_BROWSER_LAUNCH_ARGS,
-        )
+        try:
+            self._playwright = await async_playwright().start()
+            self._browser = await self._playwright.chromium.launch(
+                headless=True,
+                args=_BROWSER_LAUNCH_ARGS,
+            )
+
+            self._logger.info("The scrapper service has been launched")
+
+        except Exception as e:
+            self._logger.exception("Error launching the scrapper library")
 
     async def stop(self) -> None:
         if self._browser:
@@ -50,8 +59,11 @@ class ScreenshotCapture:
             await self._playwright.stop()
             self._playwright = None
 
+        self._logger.info("The scrapper service has been stopped")
+
     def _ensure_started(self) -> None:
         if self._browser is None:
+            self._logger.error("The browser instance is not initialized")
             raise RuntimeError(
                 "ScreenshotCapture is not running."
             )
@@ -69,11 +81,14 @@ class ScreenshotCapture:
             await self._navigate(page, url)
 
             if selector:
+                self._logger.info("Taking screenshot for %s and %s", url, selector)
                 return await self._screenshot_element(page, selector)
             else:
+                self._logger.info("Taking full screenshot for %s", url)
                 return await self._screenshot_full_page(page)
 
         finally:
+            self._logger.exception("Exception during screenshot capture")
             await context.close()
 
     async def _new_context(self) -> BrowserContext:
@@ -90,8 +105,6 @@ class ScreenshotCapture:
         try:
             await page.goto(url, wait_until="networkidle")
         except PlaywrightTimeoutError:
-            # networkidle не наступил — страница всё равно может быть видна.
-            # Делаем второй шанс с более мягким критерием.
             await page.goto(url, wait_until="domcontentloaded")
 
     @staticmethod
