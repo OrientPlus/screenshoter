@@ -15,10 +15,6 @@ from rabbit.models import ScreenshotJob, StorageJob, JobStatus
 from screenshoter.playwrt import ScreenshotCapture
 from common.logger import get_logger
 
-PAGE_TIMEOUT_MS = 30_000
-SCREENSHOT_TIMEOUT_MS = 20_000
-
-
 class ScreenshotService:
     def __init__(self) -> None:
         self._logger = get_logger(__name__)

@@ -5,6 +5,11 @@ services:
       dockerfile: rabbit/Dockerfile
     container_name: rabbitmq
     restart: unless-stopped
+    env_file:
+      - .env
+      - rabbit/.env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
     ports:
       - "15672:15672"
     volumes:
@@ -24,6 +29,11 @@ services:
       dockerfile: producer/Dockerfile
     container_name: server
     restart: unless-stopped
+    env_file:
+      - .env
+      - producer/.env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
     ports:
       - "8000:8000"
     volumes:
@@ -40,6 +50,11 @@ services:
       dockerfile: screenshoter/Dockerfile
     container_name: screenshoter
     restart: unless-stopped
+    env_file:
+      - .env
+      - screenshoter/.env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
     volumes:
       - runtime:/runtime
     depends_on:
@@ -55,6 +70,11 @@ services:
       dockerfile: storage/Dockerfile
     container_name: storage
     restart: unless-stopped
+    env_file:
+      - .env
+      - storage/.env
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@${RABBITMQ_HOST}:${RABBITMQ_PORT}/
     volumes:
       - runtime:/runtime
     depends_on:

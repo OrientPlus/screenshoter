@@ -17,6 +17,7 @@ FROM deps AS final
 
 COPY producer/ ./producer/
 COPY rabbit/broker.py rabbit/models.py ./rabbit/
+COPY common/ common/
 
 EXPOSE 8000
 

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from os import getenv
 from typing import Callable, Awaitable, Optional
 
 import aio_pika
@@ -7,14 +8,13 @@ from aio_pika import Message, DeliveryMode
 from aio_pika.abc import AbstractIncomingMessage, AbstractQueue
 
 from rabbit.models import StatusUpdate, JobStatus
-
 from common.logger import get_logger
 
-RABBITMQ_URL = "amqp://guest:guest@rabbitmq:5672/"
+RABBITMQ_URL = getenv("RABBITMQ_URL", "amqp://admin:admin@rabbitmq:5672/")
 
-QUEUE_SCREENSHOT_JOBS = "screenshot_jobs"
-QUEUE_STORAGE_JOBS = "storage_jobs"
-QUEUE_STATUS_UPDATES = "status_updates"
+QUEUE_SCREENSHOT_JOBS = getenv("QUEUE_SCREENSHOT_JOBS", "screenshot_jobs")
+QUEUE_STORAGE_JOBS = getenv("QUEUE_STORAGE_JOBS", "storage_jobs")
+QUEUE_STATUS_UPDATES = getenv("QUEUE_STATUS_UPDATES", "status_updates")
 
 
 class RabbitMQClient:

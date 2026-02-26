@@ -1,5 +1,6 @@
 import uuid
 import json
+from os import getenv
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -25,7 +26,11 @@ class Server:
     def __init__(self):
         self._logger = get_logger(__name__)
         self.app = FastAPI()
-        self._users: Dict[str, str] = {"admin": "admin"}
+
+        admin_login = getenv("ADMIN_LOGIN", "admin")
+        admin_pass = getenv("ADMIN_PASSWORD", "admin")
+
+        self._users: Dict[str, str] = {admin_login: admin_pass}
 
         self._jobs: Dict[str, JobStatusResponse] = {}
 
@@ -61,6 +66,7 @@ class Server:
                     status=update.status,
                     detail=update.detail
                 )
+                self._logger.info("Received a status update for the job %s", update.job_id)
             except Exception as e:
                 self._logger.exception("Exception during processing of a message from a broker")
 

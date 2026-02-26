@@ -7,9 +7,10 @@ from typing import Optional
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 _LOG_DIR = os.getenv("LOG_DIR", "/runtime/logs")
 _LOG_FILENAME = os.getenv("LOG_FILENAME", "screenshoter.log")
-_LOG_FILE_MAX_MB = os.getenv("LOG_FILE_MAX_MB", 10)
-_LOG_FILE_BACKUPS = os.getenv("LOG_FILE_BACKUPS", 5)
+_LOG_FILE_MAX_MB = int(os.getenv("LOG_FILE_MAX_MB", 10))
+_LOG_FILE_BACKUPS = int(os.getenv("LOG_FILE_BACKUPS", 5))
 
+_configured = False
 
 class _TextFormatter(logging.Formatter):
     _COLORS = {

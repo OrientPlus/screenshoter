@@ -1,4 +1,5 @@
 from typing import Optional
+from os import getenv
 
 from playwright.async_api import (
     Browser,
@@ -15,21 +16,19 @@ from playwright.async_api import (
 from common.logger import get_logger
 
 _BROWSER_LAUNCH_ARGS = [
-    "--no-sandbox",                 # обязательно в Docker (нет привилегированного режима)
-    "--disable-dev-shm-usage",      # /dev/shm в Docker часто мал → использовать /tmp
-    "--disable-gpu",                # GPU недоступен в headless-контейнере
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
     "--disable-setuid-sandbox",
     "--disable-extensions",
     "--mute-audio",
 ]
 
-# Параметры отображения страницы
 _VIEWPORT = {"width": 1920, "height": 1080}
 
-# Таймауты (мс)
-_PAGE_LOAD_TIMEOUT_MS    = 30_000   # максимум на goto() + networkidle
-_SELECTOR_WAIT_TIMEOUT_MS = 10_000  # максимум на появление элемента
-_SCREENSHOT_TIMEOUT_MS   = 20_000   # максимум на сам захват изображения
+_PAGE_LOAD_TIMEOUT_MS    = int(getenv("PAGE_TIMEOUT_MS", 30_000))
+_SELECTOR_WAIT_TIMEOUT_MS = int(getenv("SELECTOR_WAIT_TIMEOUT_MS", 10_000))
+_SCREENSHOT_TIMEOUT_MS   = int(getenv("SCREENSHOT_TIMEOUT_MS", 20_000))
 
 
 class ScreenshotCapture:

@@ -3,6 +3,7 @@ FROM rabbitmq:3.13-management AS base
 RUN rabbitmq-plugins enable --offline rabbitmq_management
 
 COPY rabbit/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf
+COPY common/ common/
 
 EXPOSE 15672 15672
 

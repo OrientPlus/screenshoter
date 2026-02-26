@@ -1,10 +1,12 @@
 from pathlib import Path
+from os import getenv
 from rabbit.models import StorageJob
 
 
 class Storage:
     def __init__(self):
-        self._base_save_directory = Path("/runtime")
+        path = getenv("STORAGE_DIR", "/runtime")
+        self._base_save_directory = Path(path)
         self._base_save_directory.mkdir(parents=True, exist_ok=True)
 
     def save(self, job: StorageJob) -> None:

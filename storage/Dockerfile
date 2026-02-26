@@ -17,6 +17,7 @@ FROM deps AS final
 
 COPY storage/ ./storage/
 COPY rabbit/broker.py rabbit/models.py ./rabbit/
+COPY common/ common/
 
 RUN mkdir -p /runtime
 

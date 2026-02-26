@@ -43,6 +43,7 @@ FROM browsers AS final
 
 COPY screenshoter/ ./screenshoter/
 COPY rabbit/broker.py rabbit/models.py ./rabbit/
+COPY common/ common/
 
 RUN mkdir -p /runtime
 
