@@ -27,6 +27,7 @@ SECRET_KEY = getenv("JWT_SECRET_KEY", "jwt-secret-key")
 ALGORITHM = getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
+
 class Server:
     def __init__(self):
         self._logger = get_logger(__name__)
@@ -153,7 +154,9 @@ class Server:
                             "Файл скриншота, если задача выполнена"
                     ),
                     "content": {
-                        "application/json": {"model": JobStatusResponse},
+                        "application/json": {
+                            "schema": JobStatusResponse.model_json_schema()
+                        },
                         "image/png": {},
                     },
                 },
