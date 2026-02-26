@@ -3,11 +3,6 @@ from typing import Optional
 
 from rabbit.models import JobStatus
 
-SECRET_KEY = "jwt-secret-key"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-
 class AuthRequest(BaseModel):
     username: str
     password: str

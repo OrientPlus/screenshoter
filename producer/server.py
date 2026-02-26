@@ -1,8 +1,10 @@
 import uuid
 import json
 from os import getenv
+from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt, JWTError
 
@@ -21,10 +23,14 @@ from common.logger import get_logger
 
 security = HTTPBearer()
 
+SECRET_KEY = getenv("JWT_SECRET_KEY", "jwt-secret-key")
+ALGORITHM = getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 class Server:
     def __init__(self):
         self._logger = get_logger(__name__)
+        self._runtime_dir = getenv("STORAGE_DIR", "/runtime")
         self.app = FastAPI()
 
         admin_login = getenv("ADMIN_LOGIN", "admin")
@@ -76,7 +82,7 @@ class Server:
             response_model=AuthResponse,
             responses={
                 401: {"model": ErrorResponse},
-                403: {"model": ErrorResponse}
+                403: {"model": ErrorResponse},
             },
             summary="Авторизация. Получение jwt токена",
             tags=["auth"],
@@ -140,22 +146,52 @@ class Server:
 
         @self.app.get(
             "/screenshot/{job_id}",
-            response_model=JobStatusResponse,
             responses={
+                200: {
+                    "description": (
+                            "Статус задачи, в случае, если она еще не выполнена"
+                            "Файл скриншота, если задача выполнена"
+                    ),
+                    "content": {
+                        "application/json": {"model": JobStatusResponse},
+                        "image/png": {},
+                    },
+                },
                 401: {"model": ErrorResponse},
                 403: {"model": ErrorResponse},
                 404: {"model": ErrorResponse},
+                409: {"model": ErrorResponse},
             },
-            summary="Получить статус задачи",
+            summary="Получить статус задачи или скриншот, в случае готовности задачи",
             tags=["Jobs"]
         )
-        async def get_job_status(job_id: str, _username=Depends(self.verify_token)) -> JobStatusResponse:
+        async def get_job(job_id: str, _username=Depends(self.verify_token)):
             job = self._jobs.get(job_id)
             if job is None:
                 self._logger.warning("Job %s not found in route '/screenshot/{job_id}'", job_id)
                 raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-            return job
+            if job.status != JobStatus.COMPLETED:
+                return job
+
+            file_path = Path(self._runtime_dir) / Path(f"{job.job_id}.png").name
+
+            if not file_path.exists():
+                self._logger.error(
+                    "Job %s is 'COMPLETED' but file not found in storage: %s", job_id, file_path
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Job completed but file not found: {job.detail}",
+                )
+
+            self._logger.info("Serving screenshot file for job %s: %s", job_id, file_path)
+
+            return FileResponse(
+                path=str(file_path),
+                media_type="image/png",
+                filename=f"{job_id}.png",
+            )
 
     @staticmethod
     def create_access_token(data: dict) -> str:
