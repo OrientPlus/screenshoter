@@ -1,0 +1,79 @@
+services:
+  rabbitmq:
+    build:
+      context: .
+      dockerfile: rabbit/Dockerfile
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 8s
+      start_period: 20s
+      retries: 5
+    networks:
+      - app-network
+
+  server:
+    build:
+      context: .
+      dockerfile: producer/Dockerfile
+    container_name: server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - runtime:/runtime
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  screenshoter:
+    build:
+      context: .
+      dockerfile: screenshoter/Dockerfile
+    container_name: screenshoter
+    restart: unless-stopped
+    volumes:
+      - runtime:/runtime
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    shm_size: "512mb"
+
+  storage:
+    build:
+      context: .
+      dockerfile: storage/Dockerfile
+    container_name: storage
+    restart: unless-stopped
+    volumes:
+      - runtime:/runtime
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  runtime:
+    driver: local
+    driver_opts:
+      type: none
+      device: D:\PythonProjects\PageScreener\runtime
+      o: bind
+
+  rabbitmq_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge

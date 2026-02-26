@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+aio-pika
+pydantic
+python_jose
+playwright
